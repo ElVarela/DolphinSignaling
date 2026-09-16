@@ -14,6 +14,11 @@ function safeParse(rawMessage) {
 
 wss.on("connection", (ws) => {
   let clientId = null;
+  const cleanupRegistration = () => {
+    if (clientId && clientsById.get(clientId) === ws) {
+      clientsById.delete(clientId);
+    }
+  };
 
   ws.on("message", (rawMessage) => {
     const message = safeParse(rawMessage);
@@ -22,8 +27,24 @@ wss.on("connection", (ws) => {
     }
 
     if (message.type === "register" && typeof message.clientId === "string") {
+      const registeredSocket = clientsById.get(message.clientId);
+      if (registeredSocket && registeredSocket !== ws) {
+        if (registeredSocket.readyState !== WebSocket.OPEN) {
+          clientsById.delete(message.clientId);
+        } else {
+          return;
+        }
+      }
+
+      if (clientId && clientsById.get(clientId) === ws) {
+        clientsById.delete(clientId);
+      }
       clientId = message.clientId;
       clientsById.set(clientId, ws);
+      return;
+    }
+
+    if (!clientId) {
       return;
     }
 
@@ -36,17 +57,29 @@ wss.on("connection", (ws) => {
       return;
     }
 
-    recipient.send(
-      JSON.stringify({
-        from: clientId,
-        payload: message.payload,
-      })
-    );
+    try {
+      recipient.send(
+        JSON.stringify({
+          from: clientId,
+          payload: message.payload,
+        }),
+        (error) => {
+          if (error && recipient.readyState !== WebSocket.OPEN) {
+            clientsById.delete(message.to);
+          }
+        }
+      );
+    } catch {
+      if (recipient.readyState !== WebSocket.OPEN) {
+        clientsById.delete(message.to);
+      }
+    }
   });
 
-  ws.on("close", () => {
-    if (clientId && clientsById.get(clientId) === ws) {
-      clientsById.delete(clientId);
+  ws.on("close", cleanupRegistration);
+  ws.on("error", () => {
+    if (ws.readyState !== WebSocket.OPEN) {
+      cleanupRegistration();
     }
   });
 });

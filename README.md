@@ -18,3 +18,5 @@ npm start
   `{"type":"register","clientId":"dolphin-pc"}`
 - Reenvío a destinatario:
   `{"to":"dolphin-pc","payload":{"signal":"..."}}`
+- Mensaje que recibe el destinatario:
+  `{"from":"pwa-phone-1","payload":{"signal":"..."}}`
